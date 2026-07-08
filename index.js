@@ -29,29 +29,40 @@ if (!fs.existsSync(customDir)) fs.mkdirSync(customDir, { recursive: true });
     process.exit(0);
   }
 
-  const browser = await chromium.launch();
-
   // =========================================================
   // FUNGSI UTAMA SCRAPING
   // =========================================================
   async function jalankanScrape(targetUrl, customModule = null) {
+    const hostname = new URL(targetUrl).hostname;
+    const domainDir = path.join(outputDir, hostname);
+    if (!fs.existsSync(domainDir)) fs.mkdirSync(domainDir, { recursive: true });
+
+    console.log(`\n🌐 URL Target: ${targetUrl} (${hostname})`);
+
+    // ---------------------------------------------------------
+    // ✨ FITUR BARU: Ambil settingan browser dari file custom
+    // ---------------------------------------------------------
+    const defaultLaunchOptions = { headless: true };
+    const launchOptions = (customModule && customModule.launchOptions)
+                          ? { ...defaultLaunchOptions, ...customModule.launchOptions }
+                          : defaultLaunchOptions;
+
+    console.log(`   -> Menggunakan opsi browser:`, launchOptions);
+    
+    // Browser diluncurkan di dalam fungsi agar bisa di-custom per URL
+    const browser = await chromium.launch(launchOptions);
     const page = await browser.newPage();
+
     try {
-      const hostname = new URL(targetUrl).hostname;
-      const domainDir = path.join(outputDir, hostname);
-      if (!fs.existsSync(domainDir)) fs.mkdirSync(domainDir, { recursive: true });
-
-      console.log(`\n🌐 URL Target: ${targetUrl} (${hostname})`);
-
       // ---------------------------------------------------------
-      // ✨ FITUR BARU: Ambil settingan page.goto dari file custom
+      // Settingan page.goto
       // ---------------------------------------------------------
       const defaultGotoOptions = { waitUntil: 'networkidle', timeout: 30000 };
       const gotoOptions = (customModule && customModule.gotoOptions) 
                           ? { ...defaultGotoOptions, ...customModule.gotoOptions } 
                           : defaultGotoOptions;
 
-      console.log(`   -> Menggunakan opsi goto: ${JSON.stringify(gotoOptions)}`);
+      console.log(`   -> Menggunakan opsi goto:`, gotoOptions);
       await page.goto(targetUrl, gotoOptions);
 
       // -- JOB DEFAULT (Selalu Dijalankan) --
@@ -64,18 +75,20 @@ if (!fs.existsSync(customDir)) fs.mkdirSync(customDir, { recursive: true });
       fs.writeFileSync(path.join(domainDir, `source.html`), fullHTML);
       await page.screenshot({ path: path.join(domainDir, `screenshot.png`), fullPage: true });
       
-      console.log(`✅ File default (JSON, HTML, PNG) aman di folder results/${hostname}/`);
+      console.log(`   ✅ File default (JSON, HTML, PNG) aman di folder results/${hostname}/`);
 
       // -- JOB CUSTOM (Dijalankan Kalau Ada File Custom-nya) --
       if (customModule && typeof customModule.default === 'function') {
-        console.log(`⚙️  Menjalankan script custom...`);
+        console.log(`   ⚙️  Menjalankan script custom...`);
         await customModule.default({ page, url: targetUrl, domainDir, browser });
-        console.log(`✅ Custom job berhasil!`);
+        console.log(`   ✅ Custom job berhasil!`);
       }
     } catch (error) {
       console.error(`❌ Gagal scrape URL [${targetUrl}]:`, error.message);
     } finally {
+      // Wajib ditutup setiap kali selesai 1 URL
       await page.close(); 
+      await browser.close(); 
     }
   }
 
@@ -114,6 +127,5 @@ if (!fs.existsSync(customDir)) fs.mkdirSync(customDir, { recursive: true });
     }
   }
 
-  await browser.close();
   console.log(`\n🎉 Semua proses (Normal & Custom) selesai!`);
 })();

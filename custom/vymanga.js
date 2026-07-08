@@ -1,73 +1,47 @@
 import fs from 'fs';
 import path from 'path';
 
-// =================================================================
-// 1. WAJIB: Tentukan URL yang mau di-scrape khusus untuk script ini
-// =================================================================
 export const url = 'https://vymanga.net/manga/checkmate-r';
 
-export const gotoOptions = {
-  waitUntil: 'domcontentloaded', // Berhenti loading networkidle agar tidak stuck di Cloudflare
-  timeout: 60000 // Tambah waktu jadi 60 detik jaga-jaga
+// -----------------------------------------------------
+// SETTING BROWSER: Kelihatan (headless: false) biar tembus Cloudflare
+// -----------------------------------------------------
+export const launchOptions = {
+  headless: false,
+  channel: 'chrome',
+  args: ['--disable-blink-features=AutomationControlled']
 };
 
-// =================================================================
-// 2. WAJIB: Buat fungsi default untuk mengeksekusi custom job-nya
-// Parameter { page, domainDir } dikirim otomatis oleh index.js
-// =================================================================
+// -----------------------------------------------------
+// SETTING GOTO: Jangan nunggu networkidle
+// -----------------------------------------------------
+export const gotoOptions = {
+  waitUntil: 'domcontentloaded', 
+  timeout: 60000 
+};
+
 export default async function ambilDataManga({ page, domainDir }) {
   console.log('   -> 🕵️‍♂️ Mulai mengakses halaman manga...');
-
-  // =================================================================
-  // PENYESUAIAN CLOUDFLARE ("Just a moment...")
-  // =================================================================
   console.log('   -> ⏳ Menunggu proses pengecekan Cloudflare...');
   
   try {
-    // Kita meminta script untuk menunggu sampai judul halaman TIDAK mengandung kata "Just a moment"
-    // Diberi batas waktu (timeout) 20 detik agar tidak stuck selamanya jika gagal
-    await page.waitForFunction(
-      () => {
-        return !document.title.includes('Just a moment') && !document.title.includes('Cloudflare');
-      },
-      { timeout: 20000 }
-    );
-    
-    // Tambahkan sedikit jeda ekstra (misal 3 detik) untuk memastikan elemen-elemen
-    // di halaman yang sebenarnya (setelah lolos Cloudflare) sudah selesai dimuat.
-    await page.waitForTimeout(3000);
-    
-    console.log('   -> ✅ Berhasil melewati atau tidak terkena hadangan Cloudflare!');
+    // Kita tunggu elemen 'h1' (judul manga) muncul, tandanya berhasil lewat Cloudflare
+    await page.waitForSelector('h1', { timeout: 30000 });
+    await page.waitForTimeout(3000); // Ekstra waktu buat render gambar
+    console.log('   -> ✅ Berhasil melewati hadangan Cloudflare!');
   } catch (error) {
-    console.log('   -> ⚠️ Timeout! Cloudflare mungkin butuh waktu lebih lama atau halaman langsung terbuka.');
+    console.log('   -> ❌ GAGAL: Terjebak di Cloudflare atau Timeout.');
+    return; // Langsung stop aja scriptnya biar ga nge-screenshot error
   }
 
-  // =================================================================
-  // 3. AMBIL SCREENSHOT DAN HTML
-  // Kita simpan ke dalam folder domainDir
-  // =================================================================
-  
-  // A. Ambil Screenshot
-  console.log('   -> 📸 Mengambil screenshot (full page)...');
-  const fileScreenshot = path.join(domainDir, 'hasil-screenshot.png');
-  
-  await page.screenshot({ 
-    path: fileScreenshot, 
-    fullPage: true // Set ke true agar memotret seluruh halaman dari atas ke bawah
-  });
-  console.log(`   -> 💾 Screenshot berhasil disave ke: hasil-screenshot.png`);
+  console.log('   -> 📸 Mengambil screenshot khusus manga...');
+  const fileScreenshot = path.join(domainDir, 'hasil-manga-screenshot.png');
+  await page.screenshot({ path: fileScreenshot, fullPage: true });
 
-
-  // B. Ambil Source HTML
-  console.log('   -> 📄 Mengekstrak kode HTML halamannya...');
-  const isiHTML = await page.content(); // Mengambil seluruh struktur DOM halaman
+  console.log('   -> 📄 Mengekstrak kode HTML...');
+  const isiHTML = await page.content(); 
+  const fileHtml = path.join(domainDir, 'hasil-manga-html.html');
+  fs.writeFileSync(fileHtml, isiHTML);
   
-  const fileHtml = path.join(domainDir, 'hasil-html.html');
-  fs.writeFileSync(
-    fileHtml, 
-    isiHTML
-  );
-  console.log(`   -> 💾 Source HTML berhasil disave ke: hasil-html.html`);
-
-  console.log('   -> ✨ Semua proses sukses diselesaikan!');
+  console.log('   -> ✨ Semua proses custom manga selesai!');
 }
