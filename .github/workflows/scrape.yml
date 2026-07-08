@@ -31,7 +31,7 @@ jobs:
       # Bikin kunci cache berdasarkan OS dan versi Playwright
       - name: Get Playwright version
         id: playwright-version
-        run: echo "version=$(npm ls playwright | grep playwright | awk '{print $2}')" >> $GITHUB_OUTPUT
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> $GITHUB_OUTPUT
 
       # Setup Cache buat browser Playwright biar nggak download ulang terus
       - name: Cache Playwright Browsers
