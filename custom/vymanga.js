@@ -6,6 +6,11 @@ import path from 'path';
 // =================================================================
 export const url = 'https://vymanga.net/manga/checkmate-r';
 
+export const gotoOptions = {
+  waitUntil: 'domcontentloaded', // Berhenti loading networkidle agar tidak stuck di Cloudflare
+  timeout: 60000 // Tambah waktu jadi 60 detik jaga-jaga
+};
+
 // =================================================================
 // 2. WAJIB: Buat fungsi default untuk mengeksekusi custom job-nya
 // Parameter { page, domainDir } dikirim otomatis oleh index.js
