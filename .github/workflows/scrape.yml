@@ -1,0 +1,64 @@
+name: Playwright Web Scraper
+
+# Trigger workflow: 
+# 1. Bisa jalan manual (workflow_dispatch)
+# 2. Jalan otomatis (push) KALAU config.js atau package.json berubah
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'config.js'
+      - 'package.json'
+
+jobs:
+  scrape-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Setup Node.js dan otomatis nyalain cache buat NPM
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm' 
+
+      - name: Install dependencies
+        run: npm install
+
+      # Bikin kunci cache berdasarkan OS dan versi Playwright
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(npm ls playwright | grep playwright | awk '{print $2}')" >> $GITHUB_OUTPUT
+
+      # Setup Cache buat browser Playwright biar nggak download ulang terus
+      - name: Cache Playwright Browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/msplaywright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      # Install browser HANYA kalau tidak ada di cache
+      - name: Install Playwright Browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      # Install OS dependencies wajib (jalan walau browser di-cache)
+      - name: Install Playwright OS Dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Jalankan Script Scraping
+        run: npm run scrape
+
+      - name: Upload hasil scrape sebagai Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-hasil-scrape
+          path: hasil-scrape.json
+          

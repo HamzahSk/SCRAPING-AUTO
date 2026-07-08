@@ -1,0 +1,12 @@
+{
+  "name": "playwright-scraper",
+  "version": "1.0.0",
+  "description": "Web scraper pakai Playwright dan GitHub Actions",
+  "main": "index.js",
+  "scripts": {
+    "scrape": "node index.js"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0"
+  }
+}
