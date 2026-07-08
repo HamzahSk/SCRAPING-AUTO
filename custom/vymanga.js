@@ -11,7 +11,7 @@ export const launchOptions = {
   channel: 'chrome',
   args: ['--disable-blink-features=AutomationControlled']
 };
-
+ 
 // -----------------------------------------------------
 // SETTING GOTO: Jangan nunggu networkidle
 // -----------------------------------------------------

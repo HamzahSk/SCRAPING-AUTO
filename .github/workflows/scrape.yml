@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'config.js'      # <-- Jalan kalau config di-update
-      - 'custom/**'      # <-- Jalan kalau isi folder custom di-update
+      - 'config.js'      
+      - 'custom/**'      
       - 'package.json'
 
 jobs:
@@ -19,7 +19,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Setup Node.js dan otomatis nyalain cache buat NPM
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -29,12 +28,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # Bikin kunci cache berdasarkan OS dan versi Playwright
       - name: Get Playwright version
         id: playwright-version
         run: echo "version=$(node -p "require('playwright/package.json').version")" >> $GITHUB_OUTPUT
 
-      # Setup Cache buat browser Playwright biar nggak download ulang terus
       - name: Cache Playwright Browsers
         uses: actions/cache@v4
         id: playwright-cache
@@ -44,18 +41,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
-      # Install browser HANYA kalau tidak ada di cache
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
 
-      # Install OS dependencies wajib (jalan walau browser di-cache)
       - name: Install Playwright OS Dependencies
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
+      # =========================================================
+      # ✨ TAMBAHAN BARU: Install Xvfb (Layar Virtual)
+      # =========================================================
+      - name: Install Xvfb (Virtual Display)
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      # =========================================================
+      # ✨ TAMBAHAN BARU: Jalankan script dibungkus dengan xvfb-run
+      # =========================================================
       - name: Jalankan Script Scraping
-        run: npm run scrape
+        run: xvfb-run --auto-servernum npm run scrape
 
       - name: Upload hasil scrape sebagai Artifact
         uses: actions/upload-artifact@v4
