@@ -7,7 +7,8 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'config.js'
+      - 'config.js'      # <-- Jalan kalau config di-update
+      - 'custom/**'      # <-- Jalan kalau isi folder custom di-update
       - 'package.json'
 
 jobs:

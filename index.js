@@ -1,78 +1,109 @@
 // index.js
-const { chromium } = require('playwright');
-const fs = require('fs');
-const path = require('path');
-const config = require('./config');
+import { chromium } from 'playwright';
+import fs from 'fs';
+import path from 'path';
+import { pathToFileURL } from 'url';
+
+const outputDir = path.join(process.cwd(), 'results');
+const customDir = path.join(process.cwd(), 'custom');
+
+// Bikin folder kalau belum ada
+if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+if (!fs.existsSync(customDir)) fs.mkdirSync(customDir, { recursive: true });
 
 (async () => {
-  console.log(`Memulai scraping untuk ${config.targetUrls.length} website...`);
-  
-  // Buat folder 'results' jika belum ada
-  const outputDir = path.join(__dirname, 'results');
-  if (!fs.existsSync(outputDir)){
-    fs.mkdirSync(outputDir);
+  // 1. CEK CONFIG NORMAL
+  let normalUrls = [];
+  try {
+    const config = await import('./config.js');
+    if (config.targetUrls) normalUrls = config.targetUrls;
+  } catch (e) {
+    console.log('⚠️ config.js tidak ditemukan atau tidak valid.');
   }
 
-  // Buka browser
+  // 2. CEK FILE CUSTOM
+  const customFiles = fs.readdirSync(customDir).filter(f => f.endsWith('.js'));
+
+  if (normalUrls.length === 0 && customFiles.length === 0) {
+    console.log('⚠️ Tidak ada URL di config.js dan tidak ada file di folder custom/. Berhenti.');
+    process.exit(0);
+  }
+
   const browser = await chromium.launch();
-  const page = await browser.newPage();
-  
-  for (const url of config.targetUrls) {
+
+  // =========================================================
+  // FUNGSI UTAMA SCRAPING (Biar kode nggak diulang-ulang)
+  // =========================================================
+  async function jalankanScrape(targetUrl, customModule = null) {
+    const page = await browser.newPage();
     try {
-      const hostname = new URL(url).hostname;
-      console.log(`--------------------------------------------------`);
-      console.log(`Scraping: ${url} (${hostname})`);
-      
-      // Buka halaman
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-      
-      // =========================================================
-      // 1. DATA JSON (Judul, Teks h1, Waktu)
-      // =========================================================
+      const hostname = new URL(targetUrl).hostname;
+      const domainDir = path.join(outputDir, hostname);
+      if (!fs.existsSync(domainDir)) fs.mkdirSync(domainDir, { recursive: true });
+
+      console.log(`\n🌐 URL Target: ${targetUrl} (${hostname})`);
+      await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 30000 });
+
+      // -- JOB DEFAULT (Selalu Dijalankan) --
       const pageTitle = await page.title();
-      const headings = await page.$$eval('h1', (elements) => 
-        elements.map(el => el.textContent.trim()).filter(text => text.length > 0)
-      );
+      const headings = await page.$$eval('h1', (elements) => elements.map(el => el.textContent.trim()).filter(text => text.length > 0));
       const waktuScrape = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
 
-      const hasilScrape = {
-        url: url,
-        domain: hostname,
-        waktuScrape: waktuScrape,
-        judulHalaman: pageTitle,
-        h1_teks: headings
-      };
-      
-      fs.writeFileSync(
-        path.join(outputDir, `${hostname}.json`), 
-        JSON.stringify(hasilScrape, null, 2)
-      );
-
-      // =========================================================
-      // 2. HTML ORIGINAL 
-      // Mengambil 100% struktur HTML asli dari website tersebut
-      // =========================================================
+      fs.writeFileSync(path.join(domainDir, `info.json`), JSON.stringify({ url: targetUrl, waktuScrape, judulHalaman: pageTitle, h1_teks: headings }, null, 2));
       const fullHTML = await page.content();
-      fs.writeFileSync(path.join(outputDir, `${hostname}.html`), fullHTML);
+      fs.writeFileSync(path.join(domainDir, `source.html`), fullHTML);
+      await page.screenshot({ path: path.join(domainDir, `screenshot.png`), fullPage: true });
+      
+      console.log(`✅ File default (JSON, HTML, PNG) aman di folder results/${hostname}/`);
 
-      // =========================================================
-      // 3. SCREENSHOT FULL HALAMAN
-      // Menyimpan tangkapan layar dari atas sampai paling bawah
-      // =========================================================
-      await page.screenshot({ 
-        path: path.join(outputDir, `${hostname}.png`), 
-        fullPage: true 
-      });
-
-      console.log(`✅ Berhasil! File disimpan: ${hostname}.json, ${hostname}.html, dan ${hostname}.png`);
-
+      // -- JOB CUSTOM (Dijalankan Kalau Ada File Custom-nya) --
+      if (customModule && typeof customModule.default === 'function') {
+        console.log(`⚙️  Menjalankan script custom...`);
+        await customModule.default({ page, url: targetUrl, domainDir, browser });
+        console.log(`✅ Custom job berhasil!`);
+      }
     } catch (error) {
-      console.error(`❌ Gagal scraping URL [${url}]:`, error.message);
+      console.error(`❌ Gagal scrape URL [${targetUrl}]:`, error.message);
+    } finally {
+      await page.close(); // Tutup tab page setiap selesai satu URL biar hemat RAM
     }
   }
 
-  // Tutup browser
+  // =========================================================
+  // EKSEKUSI JALUR NORMAL (Dari config.js)
+  // =========================================================
+  if (normalUrls.length > 0) {
+    console.log(`\n==================================================`);
+    console.log(`🚀 JALUR NORMAL: Mendeteksi ${normalUrls.length} URL dari config.js`);
+    for (const url of normalUrls) {
+      await jalankanScrape(url);
+    }
+  }
+
+  // =========================================================
+  // EKSEKUSI JALUR CUSTOM (Dari folder custom/)
+  // =========================================================
+  if (customFiles.length > 0) {
+    console.log(`\n==================================================`);
+    console.log(`🛠️  JALUR CUSTOM: Mendeteksi ${customFiles.length} file di folder custom/`);
+    for (const file of customFiles) {
+      try {
+        const scriptPath = pathToFileURL(path.join(customDir, file)).href;
+        const customModule = await import(scriptPath);
+        
+        if (!customModule.url) {
+          console.log(`\n⏭️  Skip: File ${file} tidak memiliki 'export const url'.`);
+          continue;
+        }
+        
+        console.log(`\n▶️  Mengeksekusi file custom: ${file}`);
+        await jalankanScrape(customModule.url, customModule);
+      } catch (err) {
+        console.error(`❌ Error membaca file custom [${file}]:`, err.message);
+      }
+    }
+  }
+
   await browser.close();
-  console.log(`\n--------------------------------------------------`);
-  console.log(`Semua proses scraping selesai!`);
+  console.log(`\n🎉 Semua proses (Normal & Custom) selesai!`);
 })();

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Web scraper pakai Playwright dan GitHub Actions",
   "main": "index.js",
+  "type": "module", 
   "scripts": {
     "scrape": "node index.js"
   },
