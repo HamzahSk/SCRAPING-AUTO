@@ -37,7 +37,7 @@ export default async function ambilDataManga({ page, domainDir }) {
         
         return !isCloudflareTitle && !isCloudflareH1 && title.length > 0;
       },
-      { timeout: 45000 } // Beri waktu maksimal 45 detik untuk verifikasi di GitHub Actions
+      { timeout: 120000 } // Beri waktu maksimal 45 detik untuk verifikasi di GitHub Actions
     );
 
     // Beri jeda ekstra 5 detik (5000ms) setelah lolos Cloudflare 
