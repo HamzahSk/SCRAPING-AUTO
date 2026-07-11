@@ -1,5 +1,8 @@
 name: Turnstile Solver Scraper
 
+# Trigger workflow: 
+# 1. Bisa jalan manual (workflow_dispatch)
+# 2. Jalan otomatis (push) KALAU config.js, solver.js, solver-cli.js, atau package.json berubah
 on:
   workflow_dispatch:
   push:
@@ -10,10 +13,9 @@ on:
       - 'package.json'
 
 jobs:
-  scrape-with-sitekey:
+  scrape-data:
     runs-on: ubuntu-latest
-    if: contains(github.event.head_commit.message, 'sitekey') || github.event_name == 'workflow_dispatch'
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,65 +23,86 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '20' # Node.js 20 LTS
+          cache: 'npm' 
 
       - name: Install dependencies
         run: npm install
 
+      # =========================================================
+      # ✨ Instalasi Dependencies OS untuk Chrome/Puppeteer + Xvfb
+      # =========================================================
       - name: Install System Dependencies & Xvfb
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2t64
+          sudo apt-get install -y \
+            xvfb \
+            libnss3 \
+            libatk1.0-0 \
+            libatk-bridge2.0-0 \
+            libcups2 \
+            libdrm2 \
+            libxkbcommon0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxfixes3 \
+            libxrandr2 \
+            libgbm1 \
+            libasound2t64 \
+            libpangocairo-1.0-0 \
+            libpango-1.0-0 \
+            libcairo2 \
+            libx11-xcb1 \
+            libxcb1 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxext6 \
+            libxfixes3 \
+            libxi6 \
+            libxrandr2 \
+            libxrender1 \
+            libxss1 \
+            libxtst6 \
+            ca-certificates \
+            fonts-liberation \
+            libappindicator1 \
+            libindicator7 \
+            xdg-utils
 
-      - name: Jalankan Solver (dengan sitekey)
+      # =========================================================
+      # ✨ Jalankan script dibungkus dengan xvfb-run
+      # =========================================================
+      - name: Jalankan Turnstile Solver
         run: xvfb-run --auto-servernum node solver-cli.js
         env:
           CHROME_PATH: /usr/bin/google-chrome-stable
-          SOLVER_MODE: sitekey
+          PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
 
-      - name: Upload hasil
+      # =========================================================
+      # 📦 Upload hasil sebagai Artifact
+      # =========================================================
+      - name: Upload hasil scrape sebagai Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hasil-sitekey
+          name: hasil-scrape-$(date +'%Y%m%d-%H%M%S')
           path: |
             results_*.json
             solver.log
           retention-days: 30
+          if-no-files-found: warn
 
-  scrape-without-sitekey:
-    runs-on: ubuntu-latest
-    if: contains(github.event.head_commit.message, 'url') || github.event_name == 'workflow_dispatch'
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Install System Dependencies & Xvfb
+      # =========================================================
+      # 📊 Tampilkan ringkasan hasil
+      # =========================================================
+      - name: Tampilkan ringkasan hasil
+        if: always()
         run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2t64
-
-      - name: Jalankan Solver (tanpa sitekey)
-        run: xvfb-run --auto-servernum node solver-cli.js
-        env:
-          CHROME_PATH: /usr/bin/google-chrome-stable
-          SOLVER_MODE: url
-
-      - name: Upload hasil
-        uses: actions/upload-artifact@v4
-        with:
-          name: hasil-url
-          path: |
-            results_*.json
-            solver.log
-          retention-days: 30
+          echo "=== Hasil Scraping ==="
+          echo "File JSON terbaru:"
+          ls -la results_*.json 2>/dev/null || echo "Tidak ada file JSON"
+          echo ""
+          echo "Log file:"
+          ls -la solver.log 2>/dev/null || echo "Tidak ada log file"
+          echo ""
+          echo "=== 5 baris terakhir log ==="
+          tail -n 5 solver.log 2>/dev/null || echo "Log tidak tersedia"
