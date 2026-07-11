@@ -1,6 +1,6 @@
 // config.js
 export const targetUrls = [
-    'https://vymanga.net/read/checkmate-r'
+    'https://vymanga.net/manga/husband-replacement'
 ];
 
 // config.js
