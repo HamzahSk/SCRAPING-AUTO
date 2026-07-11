@@ -1,0 +1,55 @@
+name: Cloakbrowser Web Scraper
+
+# Trigger workflow: 
+# 1. Bisa jalan manual (workflow_dispatch)
+# 2. Jalan otomatis (push) KALAU config.js, index.js, atau package.json berubah
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'config.js'      
+      - 'index.js'      
+      - 'package.json'
+
+jobs:
+  scrape-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Disarankan pakai versi LTS seperti 20 atau 22. (Node 24 belum sepenuhnya stabil untuk beberapa library)
+          cache: 'npm' 
+
+      - name: Install dependencies
+        run: npm install
+
+      # =========================================================
+      # ✨ Instalasi Dependencies OS untuk Chrome/Puppeteer + Xvfb
+      # =========================================================
+      - name: Install System Dependencies & Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2
+
+      # =========================================================
+      # ✨ Jalankan script dibungkus dengan xvfb-run
+      # =========================================================
+      - name: Jalankan Script Scraping
+        run: xvfb-run --auto-servernum npm run scrape
+
+      # =========================================================
+      # ⚠️ CATATAN ARTIFACT
+      # =========================================================
+      - name: Upload hasil scrape sebagai Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-hasil-scrape
+          path: results/ 
+          # Pastikan script index.js kamu (di masa depan) 
+          # benar-benar menyimpan file JSON/TXT ke dalam folder "results/"
+          # Jika tidak, step ini akan di-skip/error karena folder kosong.
