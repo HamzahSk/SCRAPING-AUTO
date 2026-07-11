@@ -1,8 +1,5 @@
 name: Turnstile Solver Scraper
 
-# Trigger workflow: 
-# 1. Bisa jalan manual (workflow_dispatch)
-# 2. Jalan otomatis (push) KALAU config.js, solver.js, solver-cli.js, atau package.json berubah
 on:
   workflow_dispatch:
   push:
@@ -23,107 +20,34 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Node.js 20 LTS
-          cache: 'npm' 
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm install
 
-      # =========================================================
-      # ✨ Instalasi Dependencies OS untuk Chrome/Puppeteer + Xvfb
-      # =========================================================
-      - name: Install System Dependencies & Xvfb
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            xvfb \
-            libnss3 \
-            libatk1.0-0 \
-            libatk-bridge2.0-0 \
-            libcups2 \
-            libdrm2 \
-            libxkbcommon0 \
-            libxcomposite1 \
-            libxdamage1 \
-            libxfixes3 \
-            libxrandr2 \
-            libgbm1 \
-            libasound2t64 \
-            libpangocairo-1.0-0 \
-            libpango-1.0-0 \
-            libcairo2 \
-            libx11-xcb1 \
-            libxcb1 \
-            libxcomposite1 \
-            libxdamage1 \
-            libxext6 \
-            libxfixes3 \
-            libxi6 \
-            libxrandr2 \
-            libxrender1 \
-            libxss1 \
-            libxtst6 \
-            ca-certificates \
-            fonts-liberation \
-            libx11-6 \
-            libxcb-shm0 \
-            libxcb-xfixes0 \
-            libxcb-shape0 \
-            libxcb-randr0 \
-            libxcb-image0 \
-            libxcb-keysyms1 \
-            libxcb-xtest0 \
-            libxcb-xinerama0 \
-            libxcb-xkb1 \
-            libxkbcommon-x11-0 \
-            libgl1-mesa-glx \
-            libgl1-mesa-dri
+          sudo apt-get install -y xvfb
 
-      # =========================================================
-      # ✨ Install Chrome (jika belum ada)
-      # =========================================================
-      - name: Install Chrome
-        run: |
-          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-
-      # =========================================================
-      # ✨ Jalankan script dibungkus dengan xvfb-run
-      # =========================================================
-      - name: Jalankan Turnstile Solver
+      - name: Run solver
         run: xvfb-run --auto-servernum node solver-cli.js
-        env:
-          CHROME_PATH: /usr/bin/google-chrome-stable
-          PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
-          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
 
-      # =========================================================
-      # 📦 Upload hasil sebagai Artifact
-      # =========================================================
-      - name: Upload hasil scrape sebagai Artifact
+      - name: Upload results
         uses: actions/upload-artifact@v4
         with:
-          name: hasil-scrape-${{ github.run_id }}
+          name: results
           path: |
             results_*.json
             solver.log
           retention-days: 30
-          if-no-files-found: warn
 
-      # =========================================================
-      # 📊 Tampilkan ringkasan hasil
-      # =========================================================
-      - name: Tampilkan ringkasan hasil
+      - name: Show summary
         if: always()
         run: |
-          echo "=== Hasil Scraping ==="
-          echo "File JSON terbaru:"
-          ls -la results_*.json 2>/dev/null || echo "Tidak ada file JSON"
+          echo "=== Results ==="
+          ls -la results_*.json solver.log 2>/dev/null || echo "No files"
           echo ""
-          echo "Log file:"
-          ls -la solver.log 2>/dev/null || echo "Tidak ada log file"
-          echo ""
-          echo "=== 10 baris terakhir log ==="
-          tail -n 10 solver.log 2>/dev/null || echo "Log tidak tersedia"
+          echo "=== Last 10 lines of log ==="
+          tail -n 10 solver.log 2>/dev/null || echo "No log"
