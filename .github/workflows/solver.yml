@@ -65,9 +65,29 @@ jobs:
             libxtst6 \
             ca-certificates \
             fonts-liberation \
-            libappindicator1 \
-            libindicator7 \
-            xdg-utils
+            libx11-6 \
+            libxcb-shm0 \
+            libxcb-xfixes0 \
+            libxcb-shape0 \
+            libxcb-randr0 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-xtest0 \
+            libxcb-xinerama0 \
+            libxcb-xkb1 \
+            libxkbcommon-x11-0 \
+            libgl1-mesa-glx \
+            libgl1-mesa-dri
+
+      # =========================================================
+      # ✨ Install Chrome (jika belum ada)
+      # =========================================================
+      - name: Install Chrome
+        run: |
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
 
       # =========================================================
       # ✨ Jalankan script dibungkus dengan xvfb-run
@@ -77,6 +97,7 @@ jobs:
         env:
           CHROME_PATH: /usr/bin/google-chrome-stable
           PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
 
       # =========================================================
       # 📦 Upload hasil sebagai Artifact
@@ -84,7 +105,7 @@ jobs:
       - name: Upload hasil scrape sebagai Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hasil-scrape-$(date +'%Y%m%d-%H%M%S')
+          name: hasil-scrape-${{ github.run_id }}
           path: |
             results_*.json
             solver.log
@@ -104,5 +125,5 @@ jobs:
           echo "Log file:"
           ls -la solver.log 2>/dev/null || echo "Tidak ada log file"
           echo ""
-          echo "=== 5 baris terakhir log ==="
-          tail -n 5 solver.log 2>/dev/null || echo "Log tidak tersedia"
+          echo "=== 10 baris terakhir log ==="
+          tail -n 10 solver.log 2>/dev/null || echo "Log tidak tersedia"
