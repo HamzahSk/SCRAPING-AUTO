@@ -1,5 +1,5 @@
 import winston from 'winston';
-import { targetUrls, settings } from './config.js';
+import { capchaUrl, settings } from './config.js';
 
 const lang = process.argv.includes('--lang=en') ? 'en' : 'zh';
 
@@ -212,14 +212,14 @@ async function openBrowser(targetURL, fastMode = false, proxy = null, customUA =
 
 // Main execution loop
 async function main() {
-  if (!targetUrls || targetUrls.length === 0) {
+  if (!capchaUrl || capchaUrl.length === 0) {
     logger.warn('Tidak ada target URL di config.js. Program dihentikan.');
     process.exit(0);
   }
 
-  logger.info(`Memulai proses untuk ${targetUrls.length} URL dari config.js...`);
+  logger.info(`Memulai proses untuk ${capchaUrl.length} URL dari config.js...`);
 
-  for (const url of targetUrls) {
+  for (const url of capchaUrl) {
     logger.info(`\n==========================================`);
     logger.info(`>>> Memproses: ${url}`);
     logger.info(`==========================================`);
