@@ -15,7 +15,7 @@ const i18n = {
     solved: '验证码已解决',
     noCaptcha: '未检测到验证码'
   },
-  en: {
+  en: { 
     apiError: 'API Error: ',
     locError: 'Locator Error: ',
     locSuccess: '[Locator Success] Box: ',

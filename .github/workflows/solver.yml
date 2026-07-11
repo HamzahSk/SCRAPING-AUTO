@@ -2,13 +2,13 @@ name: Cloakbrowser Web Scraper
 
 # Trigger workflow: 
 # 1. Bisa jalan manual (workflow_dispatch)
-# 2. Jalan otomatis (push) KALAU config.js, index.js, atau package.json berubah
+# 2. Jalan otomatis (push) KALAU config.js, solver.js, atau package.json berubah
 on:
   workflow_dispatch:
   push:
     paths:
       - 'config.js'      
-      - 'index.js'      
+      - 'solver.js'      
       - 'package.json'
 
 jobs:
@@ -40,7 +40,7 @@ jobs:
       # ✨ Jalankan script dibungkus dengan xvfb-run
       # =========================================================
       - name: Jalankan Script Scraping
-        run: xvfb-run --auto-servernum npm run scrape
+        run: xvfb-run --auto-servernum node solver.js
 
       # =========================================================
       # ⚠️ CATATAN ARTIFACT
@@ -50,6 +50,6 @@ jobs:
         with:
           name: data-hasil-scrape
           path: results/ 
-          # Pastikan script index.js kamu (di masa depan) 
+          # Pastikan script solver.js kamu (di masa depan) 
           # benar-benar menyimpan file JSON/TXT ke dalam folder "results/"
           # Jika tidak, step ini akan di-skip/error karena folder kosong.
