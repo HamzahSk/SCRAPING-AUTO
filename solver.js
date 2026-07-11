@@ -8,23 +8,19 @@ const i18n = {
     apiError: 'API 错误: ',
     locError: '定位报错: ',
     locSuccess: '[定位成功] 原始外框: ',
-    pageClosed: '页面已关闭',
     clickPos: '[执行点击] 落脚点: ',
-    foundCaptcha: '发现 CloudFlare 验证码',
-    fastModeSuccess: 'FastMode: 已获取到 cf_clearance，提前结束！',
+    foundCaptcha: '正在注入 Turnstile 验证码...',
     solved: '验证码已解决',
-    noCaptcha: '未检测到验证码'
+    timeout: '超时未获取到 token'
   },
   en: { 
     apiError: 'API Error: ',
     locError: 'Locator Error: ',
     locSuccess: '[Locator Success] Box: ',
-    pageClosed: 'Page closed',
     clickPos: '[Click Execution] Position: ',
-    foundCaptcha: 'Found CloudFlare challenge',
-    fastModeSuccess: 'FastMode: cf_clearance obtained, ending early!',
+    foundCaptcha: 'Injecting Turnstile widget...',
     solved: 'Challenge solved',
-    noCaptcha: 'No challenge detected'
+    timeout: 'Timeout: Token not obtained'
   }
 };
 
@@ -42,58 +38,13 @@ const logger = winston.createLogger({
 
 const sleep = duration => new Promise(resolve => setTimeout(resolve, duration * 1000));
 
-const checkTurnstile = ({ page }) => {
-  return new Promise(async (resolve, reject) => {
-    var waitInterval = setTimeout(() => { clearInterval(waitInterval); resolve(false) }, 5000);
-    try {
-      let box = null;
+// Randomizer untuk meniru jeda dan posisi manusia
+const randomUniform = (min, max) => Math.random() * (max - min) + min;
 
-      try {
-        const wrapper = await page.$('div:has(> div > div > input[name="cf-turnstile-response"])');
-        if (wrapper) {
-          const rect = await wrapper.boundingBox();
-          if (rect && rect.width > 250 && rect.height > 40) {
-            box = rect;
-          }
-        }
-      } catch (err) {
-        logger.error(`${t.locError}${err.message}`);
-      }
-
-      if (box) {
-        logger.debug(`${t.locSuccess}x=${box.x.toFixed(1)}, y=${box.y.toFixed(1)}, w=${box.width.toFixed(1)}, h=${box.height.toFixed(1)}`);
-
-        await new Promise(r => setTimeout(r, Math.random() * 1000 + 1500));
-        
-        if (page.isClosed()) {
-          logger.debug(t.pageClosed);
-          clearInterval(waitInterval);
-          return resolve(false);
-        }
-
-        let x = box.x + 20 + (Math.random() * 6 - 3);
-        let y = box.y + 30 + (Math.random() * 6 - 3);
-        
-        logger.debug(`${t.clickPos}x=${x.toFixed(1)}, y=${y.toFixed(1)}`);
-
-        await page.mouse.click(x, y);
-      }
-      
-      clearInterval(waitInterval);
-      resolve(true);
-    } catch (err) {
-      clearInterval(waitInterval);
-      resolve(false);
-    }
-  });
-}
-
-async function openBrowser(targetURL, fastMode = false, proxy = null, customUA = null) {
-  // Dynamic import tetap digunakan untuk cloakbrowser
+async function solveTurnstile(targetURL, sitekey, fastMode = false, proxy = null, customUA = null, timeout = 45) {
   const { launch } = await import("cloakbrowser/puppeteer");
 
   const launchArgs = [];
-
   if (customUA) {
     launchArgs.push(`--user-agent=${customUA}`);
     const uaLower = customUA.toLowerCase();
@@ -109,16 +60,10 @@ async function openBrowser(targetURL, fastMode = false, proxy = null, customUA =
     } else {
       launchArgs.push("--fingerprint-platform=windows");
     }
-
-    const chromeMatch = customUA.match(/Chrome\/(\d+)/i);
-    if (chromeMatch) {
-      launchArgs.push(`--fingerprint-brand-version=${chromeMatch[1]}`);
-      launchArgs.push(`--fingerprint-brand=Chrome`);
-    }
   }
 
   const launchOptions = {
-    headless: false, // Perhatikan: di GitHub Actions mungkin kamu perlu mengubah ini ke true atau setup xvfb
+    headless: false,
     humanize: true,
     args: launchArgs
   };
@@ -133,74 +78,126 @@ async function openBrowser(targetURL, fastMode = false, proxy = null, customUA =
   try {
     const pages = await browser.pages();
     const page = pages.length > 0 ? pages[0] : await browser.newPage();
-
     page.setDefaultNavigationTimeout(60 * 1000);
-    const userAgent = await page.evaluate(function () {
-      return navigator.userAgent;
-    });
     
-    await page.goto(targetURL, {
-      waitUntil: "domcontentloaded"
-    });
-    const content = await page.content();
+    await page.goto(targetURL, { waitUntil: "domcontentloaded" });
+    await sleep(randomUniform(2.0, 3.0));
 
-    if (content.includes("challenge-platform") === true) {
-      logger.info(t.foundCaptcha);
-      let interval;
-      try {
-        await sleep(1);
-        let isChecking = false;
-        interval = setInterval(async () => {
-          if (isChecking || page.isClosed()) return;
-          isChecking = true;
-          try {
-            await checkTurnstile({ page });
-          } catch (err) { }
-          isChecking = false;
-        }, 1000);
-        
-        if (fastMode) {
-          for (let i = 0; i < 20; i++) {
-            await sleep(1);
-            if (page.isClosed()) break;
-            const cookies = await page.cookies();
-            if (cookies.some(c => c.name === 'cf_clearance')) {
-              logger.info(t.fastModeSuccess);
-              break;
+    logger.info(t.foundCaptcha);
+
+    // 1. Injeksi Widget Turnstile secara paksa (Sesuai solver.py)
+    await page.evaluate((key) => {
+        if (document.getElementById('_ts_box')) return;
+        window._tsToken = null;
+        const wrap = document.createElement('div');
+        wrap.id = '_ts_box';
+        wrap.style = 'position:fixed;top:20px;left:20px;z-index:2147483647;';
+        document.body.appendChild(wrap);
+        window._tsLoad = function () {
+            turnstile.render('#_ts_box', {
+                sitekey: key,
+                callback: function(token) { window._tsToken = token; }
+            });
+        };
+        const s = document.createElement('script');
+        s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=_tsLoad&render=explicit';
+        s.async = true;
+        document.head.appendChild(s);
+    }, sitekey);
+
+    // Tunggu Turnstile dimuat (invisible mode mungkin langsung auto-solve)
+    await sleep(5.0);
+
+    const getToken = async () => {
+        return await page.evaluate(() => {
+            if (window._tsToken) return window._tsToken;
+            const inp = document.querySelector('#_ts_box [name="cf-turnstile-response"]');
+            return (inp && inp.value) ? inp.value : null;
+        });
+    };
+
+    const getCfIframeRect = async () => {
+        const raw = await page.evaluate(() => {
+            for (const f of document.querySelectorAll('iframe')) {
+                const src = f.src || f.getAttribute('src') || '';
+                if (!src.includes('challenges.cloudflare.com')) continue;
+                const r = f.getBoundingClientRect();
+                if (r.width > 50 && r.height > 20) return {x: r.x, y: r.y, w: r.width, h: r.height};
             }
-          }
+            return null;
+        });
+        return raw;
+    };
+
+    const doClick = async (rect) => {
+        let cx, cy;
+        if (rect) {
+            cx = rect.x + 28 + randomUniform(-3, 3);
+            cy = rect.y + rect.h / 2 + randomUniform(-3, 3);
+            logger.debug(`${t.clickPos} Iframe Cloudflare di (${cx.toFixed(0)}, ${cy.toFixed(0)})`);
         } else {
-          await sleep(10);
+            cx = 20 + 28 + randomUniform(-3, 3);
+            cy = 20 + 32 + randomUniform(-3, 3);
+            logger.debug(`${t.clickPos} Iframe tidak ada di DOM, klik posisi tetap di (${cx.toFixed(0)}, ${cy.toFixed(0)})`);
         }
-      } finally {
-        if (!fastMode) await sleep(10);
-        if (interval) clearInterval(interval);
         
-        let title = '', cookie = '';
-        if (!page.isClosed()) {
-          title = await page.title();
-          const cookies = await page.cookies();
-          cookie = cookies.map(c => c.name + "=" + c.value).join("; ").trim();
-          const finalContent = await page.content();
-          if (finalContent.includes("challenge-platform") === false) {
-            logger.info(t.solved);
-          }
-        }
-        return { title, cookie, userAgent };
-      }
+        // Meniru gerakan mouse sebelum klik
+        await page.mouse.move(cx - 80, cy - 20);
+        await sleep(randomUniform(0.15, 0.25));
+        await page.mouse.move(cx, cy);
+        await sleep(randomUniform(0.08, 0.15));
+        await page.mouse.click(cx, cy);
+    };
+
+    // 2. Cek apakah token sudah didapat (Auto-solve berhasil)
+    let token = await getToken();
+    if (token) {
+        logger.info(t.solved);
+        return { token };
     }
 
-    logger.info(t.noCaptcha);
-    if (!fastMode) {
-      await sleep(10);
+    // 3. Tunggu hingga iframe Cloudflare muncul
+    let rect = null;
+    for (let i = 0; i < 20; i++) {
+        rect = await getCfIframeRect();
+        if (rect) break;
+        await sleep(0.5);
     }
-    let title = '', cookie = '';
-    if (!page.isClosed()) {
-      title = await page.title();
-      const cookies = await page.cookies();
-      cookie = cookies.map(c => c.name + "=" + c.value).join("; ").trim();
+
+    // 4. Loop Klik jika dibutuhkan
+    const startTime = Date.now();
+    const deadline = startTime + (timeout * 1000);
+    let clickCount = 0;
+    let lastClick = 0;
+
+    while (Date.now() < deadline) {
+        token = await getToken();
+        if (token) {
+            logger.info(t.solved);
+            return { token };
+        }
+
+        const now = Date.now();
+        if (clickCount === 0 || (!token && (now - lastClick) > 8000)) {
+            if (clickCount >= 3) {
+                await sleep(0.3);
+                continue;
+            }
+            
+            await doClick(rect);
+            lastClick = Date.now();
+            clickCount += 1;
+            
+            await sleep(1.0);
+            rect = await getCfIframeRect() || rect;
+            continue;
+        }
+
+        await sleep(0.3);
     }
-    return { title, cookie, userAgent };
+
+    throw new Error(t.timeout);
+
   } finally {
     try {
       await browser.close();
@@ -213,34 +210,41 @@ async function openBrowser(targetURL, fastMode = false, proxy = null, customUA =
 // Main execution loop
 async function main() {
   if (!capchaUrl || capchaUrl.length === 0) {
-    logger.warn('Tidak ada target URL di config.js. Program dihentikan.');
+    logger.warn('Tidak ada target di config.js. Program dihentikan.');
     process.exit(0);
   }
 
-  logger.info(`Memulai proses untuk ${capchaUrl.length} URL dari config.js...`);
+  logger.info(`Memulai proses untuk ${capchaUrl.length} target...`);
 
-  for (const url of capchaUrl) {
+  for (const item of capchaUrl) {
+    const { url, sitekey } = item;
+    
+    if (!url || !sitekey) {
+        logger.warn('Skipping: Target URL atau sitekey kosong di config.js.');
+        continue;
+    }
+
     logger.info(`\n==========================================`);
-    logger.info(`>>> Memproses: ${url}`);
+    logger.info(`>>> Memproses URL: ${url}`);
+    logger.info(`>>> Sitekey: ${sitekey}`);
     logger.info(`==========================================`);
     
     try {
-      const { title, cookie, userAgent } = await openBrowser(
+      const { token } = await solveTurnstile(
         url, 
+        sitekey,
         settings.fastMode, 
         settings.proxy, 
-        settings.userAgent
+        settings.userAgent,
+        settings.timeout
       );
       
-      logger.info(`\x1b[36mTitle: ${title}\x1b[0m`);
-      logger.info(`\x1b[33mCookies: ${cookie || 'Tidak ada cookie'}\x1b[0m`);
-      logger.info(`\x1b[32mUA: ${userAgent}\x1b[0m`);
+      logger.info(`\x1b[32m[SUKSES] Token Didapatkan:\x1b[0m \n${token}\n`);
 
-      // Catatan: Jika ingin menyimpan hasil ini (misal di GitHub actions artifacts), 
-      // kamu bisa menambahkan modul `fs` lalu tulis datanya ke JSON/txt file di sini.
+      // TODO: Kamu bisa menyimpan token ini ke file jika butuh dibaca oleh service lain
 
     } catch (error) {
-      logger.error(`${t.apiError} ${url} -> ${error.stack || error}`);
+      logger.error(`${t.apiError} ${url} -> ${error.message || error}`);
     }
   }
 

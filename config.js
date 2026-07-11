@@ -4,13 +4,17 @@ export const targetUrls = [
     'https://z-library.sk/author/Yuuji'
 ];
 
+// config.js
 export const capchaUrl = [
-    "https://2captcha.com/demo/cloudflare-turnstile"
+    {
+        url: 'https://2captcha.com/demo/cloudflare-turnstile', // Ganti dengan URL target
+        sitekey: '3x00000000000000000000FF'      // Ganti dengan Sitekey target
+    }
 ];
 
-// Tambahkan blok setting ini
 export const settings = {
-    fastMode: true,  // Ubah ke false jika tidak ingin fast mode
-    proxy: null,     // Masukkan string proxy jika ada
-    userAgent: null  // Masukkan custom UA jika perlu
+    fastMode: false,
+    proxy: null,
+    userAgent: null,
+    timeout: 45 // Timeout maksimal dalam detik (seperti di Python)
 };
