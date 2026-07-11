@@ -11,6 +11,8 @@
     "playwright": "^1.40.0",
     "cloakbrowser": "^0.3.30",
     "puppeteer": "^22.0.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "winston": "^3.11.0"
   }
 }
