@@ -1,14 +1,13 @@
 // config.js
 export const targetUrls = [
-    'https://vymanga.net/read/checkmate-r/2247308', 
-    'https://z-library.sk/author/Yuuji'
+    'https://vymanga.net/read/checkmate-r/2247308'
 ];
 
 // config.js
 export const capchaUrl = [
     {
-        url: 'https://2captcha.com/demo/cloudflare-turnstile', // Ganti dengan URL target
-        sitekey: '3x00000000000000000000FF'      // Ganti dengan Sitekey target
+        url: 'https://turnstile-test.vercel.app/', // Ganti dengan URL target
+        sitekey: '0x4AAAAAAAA1WzHSsbGWTH88'      // Ganti dengan Sitekey target
     }
 ];
 
