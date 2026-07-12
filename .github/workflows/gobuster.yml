@@ -34,9 +34,6 @@ jobs:
           go install github.com/OJ/gobuster/v3@latest
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
-      - name: Verify Gobuster
-        run: gobuster version
-
       - name: Download Wordlist
         run: |
           echo "Downloading wordlist..."
