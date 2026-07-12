@@ -4,49 +4,86 @@ on:
   workflow_dispatch:
     inputs:
       target_url:
-        description: 'Masukkan URL Target (contoh: https://example.com)'
+        description: "Target URL (contoh: https://example.com)"
         required: true
         type: string
+
       wordlist_url:
-        description: 'URL Wordlist (Opsional, default pake SecLists common.txt)'
+        description: "Wordlist URL (Opsional)"
         required: false
-        default: 'https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common.txt'
+        default: "https://raw.githubusercontent.com/matteo741/Gobuster/main/wordlist.txt"
         type: string
 
 jobs:
-  gobuster-scan:
+  gobuster:
     runs-on: ubuntu-latest
 
+    timeout-minutes: 30
+
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Install Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: 'stable'
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
 
-    - name: Install Gobuster
-      run: |
-        go install github.com/OJ/gobuster/v3@latest
-        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+      - name: Install Gobuster
+        run: |
+          go install github.com/OJ/gobuster/v3@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
-    - name: Download Wordlist
-      run: |
-        echo "Mengunduh wordlist..."
-        curl -sL "${{ github.event.inputs.wordlist_url }}" -o wordlist.txt
-        echo "Wordlist siap dengan $(wc -l < wordlist.txt) baris."
+      - name: Verify Gobuster
+        run: gobuster version
 
-    - name: Run Gobuster
-      run: |
-        echo "Memulai scanning ke: ${{ github.event.inputs.target_url }}"
-        # Menjalankan gobuster mode dir, -k untuk skip sertifikat SSL jika tidak valid
-        gobuster dir -u "${{ github.event.inputs.target_url }}" -w wordlist.txt -k -o gobuster-result.txt
-      continue-on-error: true
+      - name: Download Wordlist
+        run: |
+          echo "Downloading wordlist..."
+          curl -fsSL "${{ github.event.inputs.wordlist_url }}" -o wordlist.txt
 
-    - name: Upload Result to Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: gobuster-scan-report
-        path: gobuster-result.txt
-        retention-days: 5
+          if [ ! -s wordlist.txt ]; then
+            echo "Wordlist kosong atau gagal diunduh."
+            exit 1
+          fi
+
+          echo "Jumlah entri:"
+          wc -l wordlist.txt
+
+      - name: Run Gobuster
+        continue-on-error: true
+        run: |
+          echo "Target: ${{ github.event.inputs.target_url }}"
+
+          gobuster dir \
+            -u "${{ github.event.inputs.target_url }}" \
+            -w wordlist.txt \
+            -k \
+            -t 20 \
+            --timeout 10s \
+            --no-error \
+            -o gobuster-result.txt \
+            | tee gobuster-console.log
+
+      - name: Show Summary
+        if: always()
+        run: |
+          echo "===== Ringkasan ====="
+
+          if [ -f gobuster-result.txt ]; then
+            echo "Jumlah hasil:"
+            wc -l gobuster-result.txt
+          else
+            echo "Tidak ada file hasil."
+          fi
+
+      - name: Upload Result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gobuster-report
+          path: |
+            gobuster-result.txt
+            gobuster-console.log
+            wordlist.txt
+          retention-days: 7
